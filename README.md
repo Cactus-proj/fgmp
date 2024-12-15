@@ -1,11 +1,12 @@
 # fgmp
 
 FGMP is a public domain implementation of a subset of the GNU gmp library
-with the same API. 
+with the same API.
 
-For instance, you can link the following trivial program with either 
+For instance, you can link the following trivial program with either
 this code, or libgmp.a and get the same results.
-------------
+
+```c
 #include <stdio.h>
 #include "gmp.h"
 main()
@@ -16,8 +17,7 @@ main()
     mpz_add(&c,&a,&b);
     printf("\n%s\n", mpz_get_str(NULL,10,&c));
 }
-
-------------
+```
 
 FGMP is really in the public domain. You can do whatever you want with
 it.
@@ -41,43 +41,46 @@ I personally prepare).
 Mark Henderson <markh@wimsey.bc.ca>
 
 ---
+
 This is the fifth BETA release. 1.0b5
 
 I hearby place this file and all of FGMP in the public domain.
 
 Thanks to Paul Rouse <par@r-cube.demon.co.uk> for changes to get fgmp 
-to work on a 286 MSDOS compiler, the functions mpz_sqrt and 
+to work on a 286 MSDOS compiler, the functions `mpz_sqrt` and 
 mpz_sqrtrem, plus other general bug fixes. 
 
 Thanks also to Erick Gallesio <eg@kaolin.unice.fr> for a fix
-to mpz_init_set_str
+to `mpz_init_set_str`
 
 Define B64 if your "long" type is 64 bits. Otherwise we assume 32
 bit longs. (The 64 bit version hasn't been tested enough)
 
-
-
 Platforms:
-Linux 0.99 (gcc)
-IBM RS6000/AIX 3.2 (IBM xlc compiler and gcc 2.3)
-Sun OS 4.1, Sun 3/4
-DEC Alpha OSF/1 (only lightly tested, 64 bit longs do make a difference,
-    thanks to DEC for providing access via axposf.pa.dec.com). Define B64
-    for this platform
-MSDOS 286 C compiler (see credits above)
+
+    Linux 0.99 (gcc)
+    IBM RS6000/AIX 3.2 (IBM xlc compiler and gcc 2.3)
+    Sun OS 4.1, Sun 3/4
+    DEC Alpha OSF/1 (only lightly tested, 64 bit longs do make a difference,
+        thanks to DEC for providing access via axposf.pa.dec.com). Define B64
+        for this platform
+    MSDOS 286 C compiler (see credits above)
 
 ---
+
 Some differences between gmp and fgmp
 
 1. fgmp is considerably slower than gmp
 2. fgmp does not implement the following:
+    ```
     all mpq_*
     internal mpn_* functions
     mpz_perfect_square_p
     mpz_inp_raw, mpz_out_raw
     mp_set_memory_functions, mpz_out_str, mpz_inp_str
+    ```
 3. fgmp implements the following in addition to the routines in GNU gmp.
-    int mpz_jacobi(MP_INT *a, MP_INT *b)
+    `int mpz_jacobi(MP_INT *a, MP_INT *b)`
     - finds the jacobi symbol (a/b)
 4. mpz_sizeinbase often overestimates the exact value
 
@@ -91,6 +94,7 @@ above)
 
 Here's a complete sorted list of function implemented in fgmp:
 
+```c
 _mpz_realloc
 mpz_abs
 mpz_add
@@ -148,3 +152,4 @@ mpz_sqrtrem
 mpz_sub
 mpz_sub_ui
 mpz_xor
+```
