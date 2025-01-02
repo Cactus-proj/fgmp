@@ -14,7 +14,7 @@
  *  Paul Rouse <par@r-cube.demon.co.uk> - generic bug fixes, mpz_sqrt and
  *    mpz_sqrtrem, and modifications to get fgmp to compile on a system 
  *    with int and long of different sizes (specifically MSDOS,286 compiler)
- *  Also see the file "notes" included with the fgmp distribution, for
+ *  Also see the file "README.md" included with the fgmp distribution, for
  *    more credits.
  *
  * VERSION 1.0.1
