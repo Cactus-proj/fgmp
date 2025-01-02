@@ -21,6 +21,7 @@
  */
 
 #include "gmp.h"
+#include <string.h>  // strlen
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
