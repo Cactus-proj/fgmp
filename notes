@@ -41,7 +41,7 @@ I personally prepare).
 Mark Henderson <markh@wimsey.bc.ca>
 
 ---
-This is the fifth BETA release. 1.0b5
+This is FGMP 1.0
 
 I hearby place this file and all of FGMP in the public domain.
 
@@ -58,12 +58,18 @@ bit longs. (The 64 bit version hasn't been tested enough)
 
 
 Platforms:
-Linux 0.99 (gcc)
-IBM RS6000/AIX 3.2 (IBM xlc compiler and gcc 2.3)
-Sun OS 4.1, Sun 3/4
-DEC Alpha OSF/1 (only lightly tested, 64 bit longs do make a difference,
-    thanks to DEC for providing access via axposf.pa.dec.com). Define B64
-    for this platform
+
+FGMP has been ported to the following platforms.:
+
+Linux 0.99 (gcc 2.3, i486)
+IBM RS6000/AIX 3.2 (IBM cc, gcc 2.4)
+HP/UX 8.0 (HP cc, gcc 2.3)
+Sun OS 4.1, Sun 3/4 (sun cc, gcc 2.2)
+SGI Irix 4.0.5 (SGI cc, gcc 2.3)
+DEC Alpha OSF/1 (DEC cc) 
+    (only lightly tested, 64 bit longs do make a difference,
+     thanks to DEC for providing access on axposf.pa.dec.com). 
+     Define B64 for this platform.
 MSDOS 286 C compiler (see credits above)
 
 ---
