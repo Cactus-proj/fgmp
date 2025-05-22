@@ -8,8 +8,16 @@
  *  wrote it. 
  * Bugs, complaints, flames, rants: please send email to 
  *    Mark Henderson <markh@wimsey.bc.ca>
- * I'm already aware that fgmp is considerably slow than gmp
- * VERSION 1.0 - beta 1
+ * I'm already aware that fgmp is considerably slower than gmp
+ *
+ * CREDITS:
+ *  Paul Rouse <par@r-cube.demon.co.uk> - generic bug fixes, mpz_sqrt and
+ *    mpz_sqrtrem, and modifications to get fgmp to compile on a system 
+ *    with int and long of different sizes (specifically MSDOS,286 compiler)
+ *  Also see the file "notes" included with the fgmp distribution, for
+ *    more credits.
+ *
+ * VERSION 1.0 - beta 5
  */
 
 #include "gmp.h"
@@ -19,7 +27,7 @@
 
 #define iabs(x) ((x>0) ? (x) : (-x))
 #define imax(x,y) ((x>y)?x:y)
-#define LONGBITS (sizeof(long) * 8)
+#define LONGBITS (sizeof(mp_limb) * 8)
 #define DIGITBITS (LONGBITS - 2)
 #define HALFDIGITBITS ((LONGBITS -2)/2)
 #ifndef init
@@ -36,22 +44,39 @@
 #endif
 
 
+#ifndef B64
 /* 
- * The values below are for 32 bit machines
+ * The values below are for 32 bit machines (i.e. machines with a 
+ *  32 bit long type)
  * You'll need to change them, if you're using something else
+ * If DIGITBITS is odd, see the comment at the top of mpz_sqrtrem
  */
-#define LMAX 0x3fffffff
-#define LC   0xc0000000
+#define LMAX 0x3fffffffL
+#define LC   0xc0000000L
 #define OVMASK 0x2
 #define CMASK (LMAX+1)
 #define FC ((double)CMASK)
-#define HLMAX 0x7fff
+#define HLMAX 0x7fffL
 #define HCMASK (HLMAX + 1)
-#define HIGH(x) (((x) & 0x3fff8000) >> 15)
-#define LOW(x)  ((x) & 0x7fff)
+#define HIGH(x) (((x) & 0x3fff8000L) >> 15)
+#define LOW(x)  ((x) & 0x7fffL)
+#else
 
+/* 64 bit long type */
+#define LMAX 0x3fffffffffffffffL
+#define LC 0xc000000000000000L
+#define OVMASK 0x2
+#define CMASK (LMAX+1)
+#define FC ((double)CMASK)
+#define HLMAX 0x7fffffffL
+#define HCMASK (HLMAX + 1)
+#define HIGH(x) (((x) & 0x3fffffff80000000L) >> 31)
+#define LOW(x) ((x) & 0x7fffffffL)
 
-#define hd(x,i)  (((i)>=2*(x->sz))? 0:(((i)%2) ? HIGH((x)->p[(i)/2]) : LOW((x)->p[(i)/2])))
+#endif
+
+#define hd(x,i)  (((i)>=2*(x->sz))? 0:(((i)%2) ? HIGH((x)->p[(i)/2]) \
+    : LOW((x)->p[(i)/2])))
 #define dg(x,i) ((i < x->sz) ? (x->p)[i] : 0)
 
 #ifdef __GNUC__
@@ -63,13 +88,13 @@
 #define lowdigit(x) (((x)->p)[0])
 
 struct is {
-    int v;
+    mp_limb v;
     struct is *next;
 };
 
 
 INLINE static void push(i,sp)
-int i;struct is **sp;
+mp_limb i;struct is **sp;
 {
     struct is *tmp;
     tmp = *sp;
@@ -78,11 +103,11 @@ int i;struct is **sp;
     (*sp)->next=tmp;
 }
 
-INLINE static int pop(sp)
+INLINE static mp_limb pop(sp)
 struct is **sp;
 {
     struct is *tmp;
-    int i;
+    mp_limb i;
     if (!(*sp))
         return (-1);
     tmp = *sp;
@@ -103,9 +128,9 @@ char *s;
 void mpz_init(s)
 MP_INT *s;
 {
-    s->p = (long *)malloc(sizeof(long)*2);
+    s->p = (mp_limb *)malloc(sizeof(mp_limb)*2);
 #ifdef DEBUG
-    printf("malloc: 8 bytes, %08x\n", s->p);
+    printf("malloc: 8 bytes, %08lx\n", (long)(s->p));
 #endif
     if (!(s->p))
         fatal("mpz_init: cannot allocate memory");
@@ -119,7 +144,7 @@ void mpz_init_set(s,t)
 MP_INT *s,*t;
 {
     int i;
-    s->p = (long *)malloc(sizeof(long) * t->sz);
+    s->p = (mp_limb *)malloc(sizeof(mp_limb) * t->sz);
     if (!(s->p))
         fatal("mpz_init: cannot allocate memory");
     for (i=0;i < t->sz ; i++)
@@ -133,11 +158,11 @@ void mpz_init_set_ui(s,v)
 MP_INT *s;
 unsigned long v;
 {
-    s->p = (long *)malloc(sizeof(long)*2);
+    s->p = (mp_limb *)malloc(sizeof(mp_limb)*2);
     if (!(s->p))
         fatal("mpz_init: cannot allocate memory");
     s->p[0] = (v & LMAX);
-    s->p[1] = (v & LC);
+    s->p[1] = (v & LC) >> DIGITBITS;
     if (v) 
         s->sn = 1;
     else
@@ -149,18 +174,18 @@ void mpz_init_set_si(y,v)
 MP_INT *y;
 long v;
 {
-    y->p = (long *)malloc(sizeof(long)*2);
+    y->p = (mp_limb *)malloc(sizeof(mp_limb)*2);
     if (!(y->p))
         fatal("mpz_init: cannot allocate memory");
     if (v < 0) {
         y->sn = -1;
         y->p[0] = (-v) & LMAX;
-        y->p[1] = (-v) & LC;
+        y->p[1] = ((-v) & LC) >> DIGITBITS;
     }
     else if (v > 0) {
         y->sn = 1;
         y->p[0] = v & LMAX;
-        y->p[1] = v & LC;
+        y->p[1] = (v & LC) >> DIGITBITS;
     }
     else {
         y->sn=0;
@@ -176,7 +201,7 @@ void mpz_clear(s)
 MP_INT *s;
 {
 #ifdef DEBUG
-    printf("free: %08x\n", s->p);
+    printf("free: %08lx\n", (long)(s->p));
 #endif
     if (s->p)
         free(s->p);
@@ -187,30 +212,30 @@ MP_INT *s;
 
 /* number of leading zero bits in digit */
 static int lzb(a)
-long a;
+mp_limb a;
 {
-    long i; int j;
+    mp_limb i; int j;
     j = 0;
-    for (i = (1 << (DIGITBITS-1)); i && !(a&i) ; j++,i>>=1) 
+    for (i = ((mp_limb)1 << (DIGITBITS-1)); i && !(a&i) ; j++,i>>=1) 
         ;
     return j;
 }
 
 void _mpz_realloc(x,size)
-MP_INT *x; long size;
+MP_INT *x; mp_size size;
 {
     if (size > 1 && x->sz < size) {
         int i;
 #ifdef DEBUG
-    printf("realloc %08x to size = %d ", x->p,size);
+    printf("realloc %08lx to size = %ld ", (long)(x->p),(long)(size));
 #endif
 
         if (x->p) 
-            x->p=(long *)realloc(x->p,size * sizeof(long));
+            x->p=(mp_limb *)realloc(x->p,size * sizeof(mp_limb));
         else
-            x->p=(long *)malloc(size * sizeof(long));
+            x->p=(mp_limb *)malloc(size * sizeof(mp_limb));
 #ifdef DEBUG
-    printf("becomes %08x\n", x->p);
+    printf("becomes %08lx\n", (long)(x->p));
 #endif
 
         if (!(x->p))
@@ -222,11 +247,11 @@ MP_INT *x; long size;
 }
 
 void dgset(x,i,n)
-MP_INT *x; unsigned int i; long n;
+MP_INT *x; unsigned int i; mp_limb n;
 {
     if (n) {
         if (i >= x->sz) {
-            _mpz_realloc(x,i+1);
+            _mpz_realloc(x,(mp_size)(i+1));
             x->sz = i+1;
         }
         (x->p)[i] = n;
@@ -249,10 +274,10 @@ MP_INT *y; MP_INT *x;
     unsigned int i,k = x->sz;
     if (y->sz < k) {
         k=digits(x);
-        _mpz_realloc(y,k);
+        _mpz_realloc(y,(mp_size)k);
     }
     if (y->sz > x->sz) {
-        mpz_clear(y); mpz_init(y); _mpz_realloc(y,x->sz);
+        mpz_clear(y); mpz_init(y); _mpz_realloc(y,(mp_size)(x->sz));
     }
 
     for (i=0;i < k; i++)
@@ -316,7 +341,7 @@ MP_INT *y; long v; {
 static void uadd(z,x,y)
 MP_INT *z; MP_INT *x; MP_INT *y;
 {
-    long c;
+    mp_limb c;
     int i;
     MP_INT *t;
 
@@ -326,7 +351,7 @@ MP_INT *z; MP_INT *x; MP_INT *y;
 
     /* now y->sz >= x->sz */
 
-    _mpz_realloc(z,(y->sz)+1);
+    _mpz_realloc(z,(mp_size)((y->sz)+1));
 
     c=0;
     for (i=0;i<x->sz;i++) {
@@ -352,8 +377,8 @@ static void usub(z,y,x)
 MP_INT *z; MP_INT *y; MP_INT *x; 
 {
     int i;
-    long b,m;
-    _mpz_realloc(z,(y->sz));
+    mp_limb b,m;
+    _mpz_realloc(z,(mp_size)(y->sz));
     b=0;
     for (i=0;i<y->sz;i++) {
         m=((y->p)[i]-b)-dg(x,i);
@@ -372,7 +397,7 @@ static int ucmp(y,x)
 MP_INT *y;MP_INT *x;
 {
     int i;
-    for (i=imax(x->sz,y->sz);i>=0;i--) {
+    for (i=imax(x->sz,y->sz)-1;i>=0;i--) {
         if (dg(y,i) < dg(x,i))
             return (-1);
         else if (dg(y,i) > dg(x,i))
@@ -421,15 +446,15 @@ MP_INT *x;
 void mpz_mul(ww,u,v)
 MP_INT *ww;MP_INT *u; MP_INT *v; {
     int i,j;
-    long t0,t1,t2,t3;
-    long cc;
+    mp_limb t0,t1,t2,t3;
+    mp_limb cc;
     MP_INT *w;
 
     w = (MP_INT *)malloc(sizeof(MP_INT));
     mpz_init(w);
-    _mpz_realloc(w,u->sz + v->sz);
+    _mpz_realloc(w,(mp_size)(u->sz + v->sz));
     for (j=0; j < 2*u->sz; j++) {
-        cc = 0;
+        cc = (mp_limb)0;
         t3 = hd(u,j);
             for (i=0; i < 2*v->sz; i++) {
                 t0 = t3 * hd(v,i);
@@ -476,15 +501,15 @@ MP_INT *ww;MP_INT *u; MP_INT *v; {
 static void urshift(c1,a,n)
 MP_INT *c1;MP_INT *a;int n;
 {
-    long cc = 0;
+    mp_limb cc = 0;
     if (n >= DIGITBITS)
         fatal("urshift: n >= DIGITBITS");
     if (n == 0)
         mpz_set(c1,a);
     else {
         MP_INT c; int i;
-        long rm = ((1<<n) - 1);
-        mpz_init(&c); _mpz_realloc(&c,a->sz);
+        mp_limb rm = (((mp_limb)1<<n) - 1);
+        mpz_init(&c); _mpz_realloc(&c,(mp_size)(a->sz));
         for (i=a->sz-1;i >= 0; i--) {
             c.p[i] = ((a->p[i] >> n) | cc) & LMAX;
             cc = (a->p[i] & rm) << (DIGITBITS - n);
@@ -498,15 +523,15 @@ MP_INT *c1;MP_INT *a;int n;
 static void ulshift(c1,a,n)
 MP_INT *c1;MP_INT *a;int n;
 {
-    long cc = 0;
+    mp_limb cc = 0;
     if (n >= DIGITBITS)
         fatal("ulshift: n >= DIGITBITS");
     if (n == 0)
         mpz_set(c1,a);
     else {
         MP_INT c; int i;
-        long rm = ((1<<n) - 1) << (DIGITBITS -n);
-        mpz_init(&c); _mpz_realloc(&c,a->sz + 1);
+        mp_limb rm = (((mp_limb)1<<n) - 1) << (DIGITBITS -n);
+        mpz_init(&c); _mpz_realloc(&c,(mp_size)(a->sz + 1));
         for (i=0;i < a->sz; i++) {
             c.p[i] = ((a->p[i] << n) | cc) & LMAX;
             cc = (a->p[i] & rm) >> (DIGITBITS -n);
@@ -526,9 +551,9 @@ MP_INT *z; MP_INT *x; unsigned long e;
     else {
         unsigned long i;
         long digs = (e / DIGITBITS);
-        unsigned long bs = (e % 30);
+        unsigned long bs = (e % (DIGITBITS));
         MP_INT y; mpz_init(&y);
-        _mpz_realloc(&y,(x->sz) - digs);
+        _mpz_realloc(&y,(mp_size)((x->sz) - digs));
         for (i=0; i < (x->sz - digs); i++)
             (y.p)[i] = (x->p)[i+digs];
         if (bs) {
@@ -554,9 +579,9 @@ MP_INT *z; MP_INT *x; unsigned long e;
     else {
         unsigned long i;
         long digs = (e / DIGITBITS);
-        unsigned long bs = (e % 30);
+        unsigned long bs = (e % (DIGITBITS));
         MP_INT y; mpz_init(&y);
-        _mpz_realloc(&y,(x->sz)+digs);
+        _mpz_realloc(&y,(mp_size)((x->sz)+digs));
         for (i=digs;i<((x->sz) + digs);i++)
             (y.p)[i] = (x->p)[i - digs];
         if (bs) {
@@ -575,12 +600,12 @@ MP_INT *z; MP_INT *x; unsigned long e;
 {
     short sn = x->sn;
     if (e==0)
-        mpz_set_ui(z,0);
+        mpz_set_ui(z,0L);
     else {
         unsigned long i;
         MP_INT y;
         long digs = (e / DIGITBITS);
-        unsigned long bs = (e % 30);
+        unsigned long bs = (e % (DIGITBITS));
         if (digs > x->sz || (digs == (x->sz) && bs)) {
             mpz_set(z,x);
             return;
@@ -588,13 +613,13 @@ MP_INT *z; MP_INT *x; unsigned long e;
             
         mpz_init(&y);
         if (bs)
-            _mpz_realloc(&y,digs+1);
+            _mpz_realloc(&y,(mp_size)(digs+1));
         else
-            _mpz_realloc(&y,digs);
+            _mpz_realloc(&y,(mp_size)digs);
         for (i=0; i<digs; i++)
             (y.p)[i] = (x->p)[i];
         if (bs) {
-            (y.p)[digs] = ((x->p)[digs]) & ((1 << bs) - 1);
+            (y.p)[digs] = ((x->p)[digs]) & (((mp_limb)1 << bs) - 1);
         }
         mpz_set(z,&y);
         if (uzero(z))
@@ -612,7 +637,7 @@ MP_INT *qq; MP_INT *rr; MP_INT *xx; MP_INT *yy;
 {
     MP_INT *q, *x, *y, *r;
     int ns,xd,yd,j,f,i,ccc;
-    long zz,z,qhat,b,u,m;
+    mp_limb zz,z,qhat,b,u,m;
     ccc=0;
 
     if (uzero(yy))
@@ -623,26 +648,26 @@ MP_INT *qq; MP_INT *rr; MP_INT *xx; MP_INT *yy;
     if (!x || !y || !q || !r)
         fatal("udiv: cannot allocate memory");
     mpz_init(q); mpz_init(x);mpz_init(y);mpz_init(r);
-    _mpz_realloc(x,(xx->sz)+1);
+    _mpz_realloc(x,(mp_size)((xx->sz)+1));
     yd = digits(yy);
     ns = lzb(yy->p[yd-1]);
     ulshift(x,xx,ns);
     ulshift(y,yy,ns);
     xd = digits(x); 
-    _mpz_realloc(q,xd);
+    _mpz_realloc(q,(mp_size)xd);
     xd*=2; yd*=2;
     z = hd(y,yd-1);;
     for (j=(xd-yd);j>=0;j--) {
 #ifdef DEBUG
     printf("y=");
     for (i=yd-1;i>=0;i--)
-        printf(" %04x", hd(y,i));
+        printf(" %04lx", (long)hd(y,i));
     printf("\n");
     printf("x=");
     for (i=xd-1;i>=0;i--)
-        printf(" %04x", hd(x,i));
+        printf(" %04lx", (long)hd(x,i));
     printf("\n");
-    printf("z=%08x\n",z);
+    printf("z=%08lx\n",(long)z);
 #endif
         
         if (z == LMAX)
@@ -651,8 +676,8 @@ MP_INT *qq; MP_INT *rr; MP_INT *xx; MP_INT *yy;
             qhat = ((hd(x,j+yd)<< HALFDIGITBITS) + hd(x,j+yd-1)) / (z+1);
         }
 #ifdef DEBUG
-    printf("qhat=%08x\n",qhat);
-    printf("hd=%04x/%04x\n",hd(x,j+yd),hd(x,j+yd-1));
+    printf("qhat=%08lx\n",(long)qhat);
+    printf("hd=%04lx/%04lx\n",(long)hd(x,j+yd),(long)hd(x,j+yd-1));
 #endif
         b = 0; zz=0;
         if (qhat) {
@@ -686,7 +711,7 @@ MP_INT *qq; MP_INT *rr; MP_INT *xx; MP_INT *yy;
 #ifdef DEBUG
         printf("x after sub=");
         for (i=xd-1;i>=0;i--)
-            printf(" %04x", hd(x,i));
+            printf(" %04lx", (long)hd(x,i));
         printf("\n");
 #endif
         for(;;zz++) {
@@ -708,7 +733,7 @@ MP_INT *qq; MP_INT *rr; MP_INT *xx; MP_INT *yy;
             qhat++;
             ccc++;
 #ifdef DEBUG
-            printf("corrected qhat = %08x\n", qhat);
+            printf("corrected qhat = %08lx\n", (long)qhat);
 #endif
             b=0;
             for (i=0;i<yd;i++) {
@@ -733,7 +758,7 @@ MP_INT *qq; MP_INT *rr; MP_INT *xx; MP_INT *yy;
 #ifdef DEBUG
             printf("x after cor=");
             for (i=2*(x->sz)-1;i>=0;i--)
-                printf(" %04x", hd(x,i));
+                printf(" %04lx", (long)hd(x,i));
             printf("\n");
 #endif
         }
@@ -744,11 +769,11 @@ MP_INT *qq; MP_INT *rr; MP_INT *xx; MP_INT *yy;
 #ifdef DEBUG
             printf("x after cor=");
             for (i=xd - 1;i>=0;i--)
-                printf(" %04x", hd(q,i));
+                printf(" %04lx", (long)hd(q,i));
             printf("\n");
 #endif
     }
-    _mpz_realloc(r,yy->sz);
+    _mpz_realloc(r,(mp_size)(yy->sz));
     zero(r);
     urshift(r,x,ns);
     mpz_set(rr,r);
@@ -821,11 +846,12 @@ MP_INT *x; unsigned long n;
 int mpz_cmp_si(x,n)
 MP_INT *x; long n;
 {
-    MP_INT z;
+    MP_INT z; int ret;
     mpz_init(&z);
     mpz_set_si(&z,n);
-    mpz_cmp(x,&z);
+    ret=mpz_cmp(x,&z);
     mpz_clear(&z);
+    return ret;
 }
 
 
@@ -868,6 +894,8 @@ MP_INT *q; MP_INT *x; MP_INT *y;
     mpz_init(&r);
     udiv(q,&r,x,y);
     q->sn = sn1*sn2;
+    if (uzero(q))
+        q->sn = 0;
     mpz_clear(&r);
 }
 
@@ -875,13 +903,15 @@ void mpz_mdiv(q,x,y)
 MP_INT *q; MP_INT *x; MP_INT *y;
 {
     MP_INT r; 
-    short sn1 = x->sn, sn2 = y->sn;
+    short sn1 = x->sn, sn2 = y->sn, qsign;
     mpz_init(&r);
     udiv(q,&r,x,y);
-    q->sn = sn1 * sn2;
+    qsign = q->sn = sn1*sn2;
+    if (uzero(q))
+        q->sn = 0;
     /* now if r != 0 and q < 0 we need to round q towards -inf */
-    if (!uzero(&r) && q->sn < 0) 
-        mpz_sub_ui(q,q,1);
+    if (!uzero(&r) && qsign < 0) 
+        mpz_sub_ui(q,q,1L);
     mpz_clear(&r);
 }
 
@@ -907,11 +937,14 @@ MP_INT *q; MP_INT *r; MP_INT *x; MP_INT *y;
 {
     short sn1 = x->sn, sn2 = y->sn;
     if (x->sn == 0) {
+        zero(q);
         zero(r);
         return;
     }
     udiv(q,r,x,y);
     q->sn = sn1*sn2;
+    if (uzero(q))
+        q->sn = 0;
     r->sn = sn1;
     if (uzero(r))
         r->sn = 0;
@@ -948,14 +981,16 @@ MP_INT *r; MP_INT *x; MP_INT *y;
 void mpz_mdivmod(q,r,x,y)
 MP_INT *q;MP_INT *r; MP_INT *x; MP_INT *y;
 {
-    short sn1 = x->sn, sn2 = y->sn;
+    short sn1 = x->sn, sn2 = y->sn, qsign;
     if (sn1 == 0) {
+        zero(q);
         zero(r);
         return;
     }
     udiv(q,r,x,y);
-    q->sn = sn1*sn2;
+    qsign = q->sn = sn1*sn2;
     if (uzero(r)) {
+        /* q != 0, since q=r=0 would mean x=0, which was tested above */
         r->sn = 0;
         return;
     }
@@ -969,9 +1004,11 @@ MP_INT *q;MP_INT *r; MP_INT *x; MP_INT *y;
         r->sn = 1;
         mpz_add(r,y,r);
     }
+    if (uzero(q))
+        q->sn = 0;
     /* now if r != 0 and q < 0 we need to round q towards -inf */
-    if (!uzero(r) && q->sn < 0) 
-        mpz_sub_ui(q,q,1);
+    if (!uzero(r) && qsign < 0) 
+        mpz_sub_ui(q,q,1L);
 }
 
 void mpz_mod_ui(x,y,n)
@@ -1048,7 +1085,7 @@ char *s;  int base; MP_INT *x; {
     MP_INT xx,q,r,bb;
     char *p,*t,*ps;
     int sz = mpz_sizeinbase(x,base);
-    int d;
+    mp_limb d;
     if (base < 2 || base > 36)
         return s;
     t = (char *)malloc(sz+2);
@@ -1066,7 +1103,7 @@ char *s;  int base; MP_INT *x; {
     }
     mpz_init(&xx); mpz_init(&q); mpz_init(&r); mpz_init(&bb);
     mpz_set(&xx,x);
-    mpz_set_ui(&bb,base);
+    mpz_set_ui(&bb,(unsigned long)base);
     ps = s;
     if (x->sn < 0) {
         *ps++= '-';
@@ -1103,7 +1140,7 @@ MP_INT *x; char *s; int base;
     mpz_init(&m);
     mpz_init(&t);
     mpz_init(&bb);
-    mpz_set_ui(&m,1);
+    mpz_set_ui(&m,1L);
     zero(x);
     while (*s==' ' || *s=='\t' || *s=='\n')
         s++;
@@ -1128,7 +1165,7 @@ MP_INT *x; char *s; int base;
     }
     if (base < 2 || base > 36)
         fatal("mpz_set_str: invalid base");
-    mpz_set_ui(&bb,base);
+    mpz_set_ui(&bb,(unsigned long)base);
     l=strlen(s);
     for (i = l-1; i>=0; i--) {
         if (s[i]==' ' || s[i]=='\t' || s[i]=='\n') 
@@ -1147,7 +1184,7 @@ MP_INT *x; char *s; int base;
             retval = (-1);
             break;
         }
-        mpz_mul_ui(&t,&m,k);
+        mpz_mul_ui(&t,&m,(unsigned long)k);
         mpz_add(x,x,&t);
         mpz_mul(&m,&m,&bb);
 #ifdef DEBUG
@@ -1157,9 +1194,7 @@ MP_INT *x; char *s; int base;
         printf("m=%s\n",mpz_get_str(NULL,10,&m));
 #endif
     }
-    if (uzero(&m))
-        x->sn = 0;
-    else 
+    if (x->sn)
         x->sn = sn;
     mpz_clear(&m);
     mpz_clear(&bb);
@@ -1167,10 +1202,10 @@ MP_INT *x; char *s; int base;
     return retval;
 }
 
-void mpz_init_set_str(x,s,base)
+int mpz_init_set_str(x,s,base)
 MP_INT *x; char *s; int base;
 {
-    mpz_init(x); mpz_set_str(x,s,base);
+    mpz_init(x); return mpz_set_str(x,s,base);
 }
 
 #define mpz_randombyte (rand()& 0xff)
@@ -1185,7 +1220,7 @@ MP_INT *x; unsigned int size;
     long t;
     if (oflow)
         digits++;
-    _mpz_realloc(x,digits);
+    _mpz_realloc(x,(mp_size)digits);
 
     for (i=0; i<digits; i++) {
         t = 0;
@@ -1194,7 +1229,7 @@ MP_INT *x; unsigned int size;
         (x->p)[i] = t & LMAX;
     }
     if (oflow) 
-        (x->p)[digits-1] &= ((1 << oflow) - 1);
+        (x->p)[digits-1] &= (((mp_limb)1 << oflow) - 1);
 }
 void mpz_random2(x,size)
 MP_INT *x; unsigned int size;
@@ -1206,7 +1241,7 @@ MP_INT *x; unsigned int size;
     long t;
     if (oflow)
         digits++;
-    _mpz_realloc(x,digits);
+    _mpz_realloc(x,(mp_size)digits);
 
     for (i=0; i<digits; i++) {
         t = 0;
@@ -1215,7 +1250,7 @@ MP_INT *x; unsigned int size;
         (x->p)[i] = (t & LMAX) % 2;
     }
     if (oflow) 
-        (x->p)[digits-1] &= ((1 << oflow) - 1);
+        (x->p)[digits-1] &= (((mp_limb)1 << oflow) - 1);
 }
 
 size_t mpz_size(x)
@@ -1252,7 +1287,7 @@ MP_INT *x; MP_INT *y;
 void mpz_fac_ui(x,n)
 MP_INT *x; unsigned long n;
 {
-    mpz_set_ui(x,1);
+    mpz_set_ui(x,1L);
     if (n==0 || n == 1)
         return;
     for (;n>1;n--)
@@ -1294,9 +1329,9 @@ MP_INT *gg,*xx,*yy,*aa,*bb;
 
     if (uzero(bb)) {
         mpz_set(gg,aa);
-        mpz_set_ui(xx,1);
+        mpz_set_ui(xx,1L);
         if (yy)
-            mpz_set_ui(yy,0);
+            mpz_set_ui(yy,0L);
         return;
     }
     
@@ -1353,13 +1388,13 @@ MP_INT *ac, *bc;
      *          +1 if b mod 4 == 1
      */
 
-    if (mpz_cmp_ui(ac,0) < 0 && (lowdigit(bc) % 4) == 3)
+    if (mpz_cmp_ui(ac,0L) < 0 && (lowdigit(bc) % 4) == 3)
         sgn=-sgn;
 
     mpz_abs(a,ac); mpz_set(b,bc);
 
     /* while (a > 1) { */
-    while(mpz_cmp_ui(a,1) > 0) {
+    while(mpz_cmp_ui(a,1L) > 0) {
 
         if (even(a)) {
 
@@ -1373,7 +1408,7 @@ MP_INT *ac, *bc;
                 sgn = -sgn;
 
             /* a = a / 2 */
-            mpz_div_2exp(a,a,1); 
+            mpz_div_2exp(a,a,1L); 
 
         } 
         else {
@@ -1401,7 +1436,7 @@ MP_INT *z,*x,*y;
 {
     int i,sz;
     sz = imax(x->sz, y->sz);
-    _mpz_realloc(z,sz);
+    _mpz_realloc(z,(mp_size)sz);
     for (i=0; i < sz; i++)
         (z->p)[i] = dg(x,i) & dg(y,i);
     if (x->sn < 0 && y->sn < 0)
@@ -1417,7 +1452,7 @@ MP_INT *z,*x,*y;
 {
     int i,sz;
     sz = imax(x->sz, y->sz);
-    _mpz_realloc(z,sz);
+    _mpz_realloc(z,(mp_size)sz);
     for (i=0; i < sz; i++)
         (z->p)[i] = dg(x,i) | dg(y,i);
     if (x->sn < 0 || y->sn < 0)
@@ -1433,7 +1468,7 @@ MP_INT *z,*x,*y;
 {
     int i,sz;
     sz = imax(x->sz, y->sz);
-    _mpz_realloc(z,sz);
+    _mpz_realloc(z,(mp_size)sz);
     for (i=0; i < sz; i++)
         (z->p)[i] = dg(x,i) ^ dg(y,i);
     if ((x->sn <= 0 && y->sn > 0) || (x->sn > 0 && y->sn <=0))
@@ -1448,10 +1483,10 @@ MP_INT *zz, *x;
 unsigned long e;
 {
     MP_INT *t;
-    unsigned long mask = (1 << (LONGBITS-1));
+    unsigned long mask = (1L<< (LONGBITS-1));
     
     if (e==0) {
-        mpz_set_ui(zz,1);
+        mpz_set_ui(zz,1L);
         return;
     }
 
@@ -1477,7 +1512,7 @@ MP_INT *zz,*x,*ee,*n;
     int k,i;
     
     if (uzero(ee)) {
-        mpz_set_ui(zz,1);
+        mpz_set_ui(zz,1L);
         return;
     }
 
@@ -1486,7 +1521,7 @@ MP_INT *zz,*x,*ee,*n;
     }
     init(e); init(t); mpz_set(e,ee);
 
-    for (k=0;!uzero(e);k++,mpz_div_2exp(e,e,1))
+    for (k=0;!uzero(e);k++,mpz_div_2exp(e,e,1L))
         push(lowdigit(e) & 1,&stack);
     k--;
     i=pop(&stack);
@@ -1526,9 +1561,9 @@ MP_INT *x, *n;
     int trivflag = 0;
     int k,i;
     
-    init(e1); init(e); init(t); mpz_sub_ui(e,n,1); mpz_set(e1,e);
+    init(e1); init(e); init(t); mpz_sub_ui(e,n,1L); mpz_set(e1,e);
 
-    for (k=0;!uzero(e);k++,mpz_div_2exp(e,e,1))
+    for (k=0;!uzero(e);k++,mpz_div_2exp(e,e,1L))
         push(lowdigit(e) & 1,&stack);
     k--;
     i=pop(&stack);
@@ -1536,9 +1571,9 @@ MP_INT *x, *n;
     mpz_mod(t,x,n);  /* t=x%n */
 
     for (i=k-1;i>=0;i--) {
-        trivflag = !mpz_cmp_ui(t,1) || !mpz_cmp(t,e1);
+        trivflag = !mpz_cmp_ui(t,1L) || !mpz_cmp(t,e1);
         mpz_mul(t,t,t); mpz_mod(t,t,n);  
-        if (!trivflag && !mpz_cmp_ui(t,1)) {
+        if (!trivflag && !mpz_cmp_ui(t,1L)) {
             clear(t); clear(e); clear(e1);
             return 1;
         }
@@ -1548,7 +1583,7 @@ MP_INT *x, *n;
             mpz_mod(t,t,n);
         }
     }
-    if (mpz_cmp_ui(t,1))  { /* t!=1 */
+    if (mpz_cmp_ui(t,1L))  { /* t!=1 */
         clear(t); clear(e); clear(e1);
         return 1;
     }
@@ -1558,7 +1593,7 @@ MP_INT *x, *n;
     }
 }
 
-unsigned int smallp[] = {2,3,5,7,11,13,17};
+unsigned long smallp[] = {2,3,5,7,11,13,17};
 int mpz_probab_prime_p(nn,s)
 MP_INT *nn; int s;
 {   
@@ -1569,18 +1604,18 @@ MP_INT *nn; int s;
     if (uzero(nn))
         return 0;
     init(n); mpz_abs(n,nn);
-    if (!mpz_cmp_ui(n,1)) {
+    if (!mpz_cmp_ui(n,1L)) {
         clear(n);
         return 0;
     }
     init(a);
-    for (i=0;i<sizeof(smallp)/sizeof(unsigned int); i++) {
+    for (i=0;i<sizeof(smallp)/sizeof(unsigned long); i++) {
         mpz_mod_ui(a,n,smallp[i]);
         if (uzero(a)) {
             clear(a); clear(n); return 0;
         }
     }
-    _mpz_realloc(a,n->sz);
+    _mpz_realloc(a,(mp_size)(n->sz));
     for (k=0; k<s; k++) {
 
         /* generate a "random" a */
@@ -1601,3 +1636,116 @@ MP_INT *nn; int s;
     clear(a);clear(n);
     return 1;
 }   
+
+
+/* Square roots are found by Newton's method, but since we are working
+ * with integers we have to consider carefully the termination conditions.
+ * If we are seeking x = floor(sqrt(a)), the iteration is
+ *     x_{n+1} = floor ((floor (a/x_n) + x_n)/2) == floor ((a + x_n^2)/(2*x))
+ * If eps_n represents the error (exactly, eps_n and sqrt(a) real) in the form:
+ *     x_n = (1 + eps_n) sqrt(a)
+ * then it is easy to show that for a >= 4
+ *     if 0 <= eps_n, then either 0 <= eps_{n+1} <= (eps_n^2)/2
+ *                         or x_{n+1} = floor (sqrt(a))
+ *     if x_n = floor (sqrt(a)), then either x_{n+1} = floor (sqrt(a))
+ *                               or x_{n+1} = floor (sqrt(a)) + 1
+ * Therefore, if the initial approximation x_0 is chosen so that
+ *     0 <= eps_0 <= 1/2
+ * then the error remains postive and monotonically decreasing with
+ *     eps_n <= 2 ^ (-(2^(n+1) - 1))
+ * unless we reach the correct floor(sqrt(a)), after which we may oscillate
+ * between it and the value one higher.
+ * We choose the number of iterations, k, to guarantee
+ *     eps_k sqrt(a) < 1,  so x_k <= floor (sqrt (a)) + 1
+ * so finally x_k is either the required answer or one too big (which we
+ * check by a simple multiplication and comparison).
+ *
+ * The calculation of the initial approximation *assumes* DIGITBITS is even.
+ * It probably always will be, so for now let's leave the code simple,
+ * clear and all reachable in testing!
+ */
+void mpz_sqrtrem (root, rem, a)
+    MP_INT *root;
+    MP_INT *rem;
+    MP_INT *a;
+{
+    MP_INT tmp;
+    MP_INT r;
+    mp_limb z;
+    unsigned long j, h;
+    int k;
+
+    if (a->sn < 0)
+        /* Negative operand, nothing correct we can do */
+        return;
+
+    /* Now, a good enough approximation to the root is obtained by writing
+     *     a = z * 2^(2j) + y,  4 <= z <= 15 and 0 <= y < 2^(2j)
+     * then taking
+     *     root = ciel (sqrt(z+1)) * 2^j
+     */
+
+    for (j = a->sz - 1; j != 0 && (a->p)[j] == 0; j--);
+    z = (a->p)[j];
+    if (z < 4) {
+        if (j == 0) {
+            /* Special case for small operand (main interation not valid) */
+            mpz_set_ui (root, (z>0) ? 1L : 0L);
+            if (rem)
+                mpz_set_ui (rem, (z>1) ? z-1L : 0L);
+            return;
+        } else {
+            z = (z << 2) + ((a->p)[j-1] >> (DIGITBITS-2));
+            j = j * DIGITBITS - 2;
+        }
+    } else {
+        j = j * DIGITBITS;
+        while (z & ~0xf) {
+            z >>= 2;
+            j += 2;
+        }
+    }
+    j >>= 1;                            /* z and j now as described above */
+    for (k=1, h=4; h < j+3; k++, h*=2); /* 2^(k+1) >= j+3, since a < 2^(2j+4) */
+    mpz_init_set_ui (&r, (z>8) ? 4L : 3L);
+    mpz_mul_2exp (&r, &r, j);
+
+#ifdef DEBUG
+    printf ("mpz_sqrtrem: z = %lu, j = %lu, k = %d\n", (long)z, j, k);
+#endif
+
+    /* Main iteration */
+    mpz_init (&tmp);
+    for ( ; k > 0; k--) {
+        mpz_div (&tmp, a, &r);
+        mpz_add (&r, &tmp, &r);
+        mpz_div_2exp (&r, &r, 1L);
+    }
+
+    /* Adjust result (which may be one too big) and set remainder */
+    mpz_mul (&tmp, &r, &r);
+    if (mpz_cmp (&tmp, a) > 0) {
+        mpz_sub_ui (root, &r, 1L);
+        if (rem) {
+            mpz_sub (rem, a, &tmp);
+            mpz_add (rem, rem, &r);
+            mpz_add (rem, rem, &r);
+            mpz_sub_ui (rem, rem, 1L);
+        }
+    } else {
+        mpz_set (root, &r);
+        if (rem)
+            mpz_sub (rem, a, &tmp);
+    }
+
+    mpz_clear (&tmp);
+    mpz_clear (&r);
+}
+
+
+void mpz_sqrt (root, a)
+    MP_INT *root;
+    MP_INT *a;
+{
+    mpz_sqrtrem (root, NULL, a);
+}

@@ -1,6 +1,12 @@
-CC=gcc -I. -g
-#CC=purify cc -g -Bstatic  
-gmp.o: gmp.c
-	$(CC) -c -g gmp.c
+#
+# Makefile for Free MP
+#
+CC=gcc
+CFLAGS=-O
+
+libfgmp.a: gmp.o
+	ar cq libfgmp.a gmp.o
+	ranlib libfgmp.a
+
 clean:
-	rm -f gmp.o core
+	rm -f gmp.o libfgmp.a core *~
