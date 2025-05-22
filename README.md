@@ -1,3 +1,5 @@
+# fgmp
+
 WELCOME TO FGMP.
 
 FGMP is a public domain implementation of a subset of the GNU gmp library
@@ -47,7 +49,7 @@ I hearby place this file and all of FGMP in the public domain.
 
 Thanks to Paul Rouse <par@r-cube.demon.co.uk> for changes to get fgmp 
 to work on a 286 MSDOS compiler, the functions `mpz_sqrt` and 
-mpz_sqrtrem, plus other general bug fixes. 
+`mpz_sqrtrem`, plus other general bug fixes. 
 
 Thanks also to Erick Gallesio <eg@kaolin.unice.fr> for a fix
 to `mpz_init_set_str`
@@ -58,7 +60,7 @@ bit longs. (The 64 bit version hasn't been tested enough)
 Platforms:
 
 FGMP has been ported to the following platforms.:
-
+```
 Linux 0.99 (gcc 2.3, i486)
 IBM RS6000/AIX 3.2 (IBM cc, gcc 2.4)
 HP/UX 8.0 (HP cc, gcc 2.3)
@@ -69,6 +71,7 @@ DEC Alpha OSF/1 (DEC cc)
      thanks to DEC for providing access on axposf.pa.dec.com). 
      Define B64 for this platform.
 MSDOS 286 C compiler (see credits above)
+```
 
 ---
 
@@ -91,10 +94,10 @@ Some differences between gmp and fgmp
 5. To convert your gmp based program to fgmp (subject to the
 above)
 
-- recompile your source. Make sure to include the gmp.h file included
-  with fgmp rather than that included with gmp. (The point is to recompile
-  all files which include gmp.h)
-- link with gmp.o instead of libgmp.a
+    - recompile your source. Make sure to include the gmp.h file included
+    with fgmp rather than that included with gmp. (The point is to recompile
+    all files which include gmp.h)
+    - link with gmp.o instead of libgmp.a
 
 Here's a complete sorted list of function implemented in fgmp:
 
