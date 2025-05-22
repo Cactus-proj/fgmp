@@ -12,7 +12,7 @@ main()
 {
     MP_INT a; MP_INT b; MP_INT c;
 
-    mpz_init_set_ui(&a,1); mpz_init_set_ui(&b,2); mpz_init(&c);
+    mpz_init_set_ui(&a,1L); mpz_init_set_ui(&b,2L); mpz_init(&c);
     mpz_add(&c,&a,&b);
     printf("\n%s\n", mpz_get_str(NULL,10,&c));
 }
@@ -41,7 +41,7 @@ I personally prepare).
 Mark Henderson <markh@wimsey.bc.ca>
 
 ---
-This is FGMP 1.0
+This is FGMP 1.0.1
 
 I hearby place this file and all of FGMP in the public domain.
 

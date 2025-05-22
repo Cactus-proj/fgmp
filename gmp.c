@@ -13,11 +13,11 @@
  * CREDITS:
  *  Paul Rouse <par@r-cube.demon.co.uk> - generic bug fixes, mpz_sqrt and
  *    mpz_sqrtrem, and modifications to get fgmp to compile on a system 
- *    with int and long of different sizes (specifically MSDOS,286 compiler)
+ *    with int and long of different sizes (specifically MSDOS,286 compiler).
  *  Also see the file "notes" included with the fgmp distribution, for
  *    more credits.
  *
- * VERSION 1.0
+ * VERSION 1.0.1
  */
 
 #include "gmp.h"
@@ -224,8 +224,8 @@ mp_limb a;
 void _mpz_realloc(x,size)
 MP_INT *x; mp_size size;
 {
+    int i;
     if (size > 1 && x->sz < size) {
-        int i;
 #ifdef DEBUG
     printf("realloc %08lx to size = %ld ", (long)(x->p),(long)(size));
 #endif
@@ -243,7 +243,9 @@ MP_INT *x; mp_size size;
         for (i=x->sz;i<size;i++)
             (x->p)[i] = 0;
         x->sz = size;
-    }
+    } else if (size < x->sz)
+        for (i=size; i<x->sz; i++)
+            (x->p)[i] = 0;
 }
 
 void dgset(x,i,n)
@@ -1233,6 +1235,12 @@ MP_INT *x; unsigned int size;
     }
     if (oflow) 
         (x->p)[digits-1] &= (((mp_limb)1 << oflow) - 1);
+    x->sn = 0;
+    for (i=0; i<digits; i++)
+        if ((x->p)[i]) {
+            x->sn = 1;
+            break;
+        }
 }
 void mpz_random2(x,size)
 MP_INT *x; unsigned int size;
@@ -1254,6 +1262,12 @@ MP_INT *x; unsigned int size;
     }
     if (oflow) 
         (x->p)[digits-1] &= (((mp_limb)1 << oflow) - 1);
+    x->sn = 0;
+    for (i=0; i<digits; i++)
+        if ((x->p)[i]) {
+            x->sn = 1;
+            break;
+        }
 }
 
 size_t mpz_size(x)
