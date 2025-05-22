@@ -2,28 +2,14 @@
  * FREE GMP - a public domain implementation of a subset of the 
  *           gmp library
  *
------BEGIN PRIVACY-ENHANCED MESSAGE-----
-Proc-Type: 2001,MIC-CLEAR
-Originator-Name: markh@wimsey.bc.ca
-Originator-Key-Asymmetric:
- MIGeMAoGBFUIAQECAgQAA4GPADCBiwKBgQD6pxeLMchQF50lf9TbhnVcF15yObiT
- q5oDvpG6pf+Al1W2s714ATGsERdyEfDwvhqPCK+OujqZxkrx2hJoVNs6Wpma125s
- MMeCBmkj1wIiNO8fYYpeYXJo4kbw/MhdiYclV1aJrH51KXbGdCWoiFezK5tgoW8d
- fb8uPMQULJagIwIFAIAAAIc=
-MIC-Info: RSA-MD5,RSA,
- KbBGxWz9HUe27rWZqGV0fmpITQW157NlWjYf1PjakTSsT66fK9Hw9Qb43Bxj0YRd
- RpM3dpNvTZMQuAPibgjWY1LzczcekTv9oiEyXg+/KQv7bzt9jow7/oGsiQs4Pkn5
- yEjWvzsXUMsf1O5OddiQCwUWebmn1R2A8S+swi+TN9w=
-
-I hearby place FGMP in the public domain.
------END PRIVACY-ENHANCED MESSAGE-----
-
+ * I hearby place the file in the public domain.
+ *
  * Do whatever you want with this code. Change it. Sell it. Claim you
  *  wrote it. 
  * Bugs, complaints, flames, rants: please send email to 
  *    Mark Henderson <markh@wimsey.bc.ca>
  * I'm already aware that fgmp is considerably slow than gmp
- * VERSION 0.2
+ * VERSION 1.0 - beta 1
  */
 
 #include "gmp.h"
